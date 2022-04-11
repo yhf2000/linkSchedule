@@ -3,7 +3,9 @@
 using namespace std;
 
 namespace Const {
-
+    double c1 = 0, q = 0;
+    double alpha = 2, beta = 1, N = 1;
+    double Power = 1;
 }
 
 
@@ -12,7 +14,7 @@ struct Node {
 
     Node() = default;
 
-    Node(double x, double y) : x(x), y(y) {}
+    Node(double x, double y) : x(x), y(y), Power(Const::Power) {}
 
     Node(double x, double y, double Power) : x(x), y(y), Power(Power) {}
 
@@ -39,10 +41,11 @@ struct Node {
 
 struct Link {
     Node Sender, Receiver;
+    bool ReceiverGetMessage, SenderGetAck;
 
     Link() = default;
 
-    Link(Node s, Node r) : Sender(s), Receiver(r) {}
+    Link(Node s, Node r) : Sender(s), Receiver(r), ReceiverGetMessage(false), SenderGetAck(false) {}
 
     double getDis() const {
         return (Sender - Receiver).dis();
@@ -68,10 +71,17 @@ struct Gen {
         if (r) return {Sender + Node(pu(e), pu(e)).Normalized() * lu(e), Sender};
         return {Sender, Sender + Node(pu(e), pu(e)).Normalized() * lu(e)};
     }
+
+    bool choice(double p) {
+        uniform_real_distribution<double> u(0, 1);
+        return u(e) <= p;
+    }
 };
 
 struct SINR {
     double alpha, beta, N;
+
+    SINR() : alpha(Const::alpha), beta(Const::beta), N(Const::N) {}
 
     int listen(Node &Receiver, vector<Node> &Senders) const {
         double sum = 0;
@@ -103,15 +113,64 @@ struct Network {
     }
 
 
-    void run() {
+    int run() {
+        Gen g;
+        SINR sinr;
+        for (auto &i: d) {
+            i.ReceiverGetMessage = false;
+            i.SenderGetAck = false;
+        }
+        int unFinishNumber = (int) d.size();
+        int Round = 0;
 
+        double q = 1.0 / 8;
+        for (int k = 1; unFinishNumber > 0; q /= 2, k++) {
 
+            Round ++;
+
+            vector<Node> Senders;
+            vector<int> idx;
+
+            for (int i = 0; i < d.size(); i++) {
+                if (!d[i].ReceiverGetMessage && g.choice(q)) {
+                    Senders.emplace_back(d[i].Sender);
+                    idx.emplace_back(i);
+                }
+            }
+            for (int i = 0; i < d.size(); i++) {
+                if (!d[i].ReceiverGetMessage) {
+                    int p = sinr.listen(d[i].Receiver, Senders);
+                    if (p != -1 && idx[p] == i) {
+                        d[i].ReceiverGetMessage = true;
+                    }
+                }
+            }
+
+            Senders.clear();
+            idx.clear();
+
+            for (int i = 0; i < d.size(); i++) {
+                if (d[i].ReceiverGetMessage && g.choice(q)) {
+                    Senders.emplace_back(d[i].Receiver);
+                    idx.emplace_back(i);
+                }
+            }
+            for (int i = 0; i < d.size(); i++) {
+                if (!d[i].SenderGetAck) {
+                    int p = sinr.listen(d[i].Sender, Senders);
+                    if (p != -1 && idx[p] == i) {
+                        d[i].SenderGetAck = true;
+                        unFinishNumber--;
+                    }
+                }
+            }
+        }
     }
 
 };
 
 int main() {
-
-
+    Network network(200, 1, 20, 200);
+    cout << network.run();
     return 0;
 }
