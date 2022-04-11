@@ -4,7 +4,7 @@ using namespace std;
 
 namespace Const {
     double c1 = 0, q = 0;
-    double alpha = 2, beta = 1, N = 1;
+    double alpha = 2, beta = 1.2, N = 0;
     double Power = 1;
 }
 
@@ -165,6 +165,7 @@ struct Network {
                 }
             }
         }
+        return Round;
     }
 
 };
