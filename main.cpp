@@ -327,14 +327,21 @@ struct Network {
 
 };
 
+
+
 int main() {
 
-    ofstream out(R"(dataX.txt)");
-
-    int Rept = 1, PoolSize = 56, RInT = 100;
-
-    for (int n = 200; n <= 400; n += 10) {
-        cerr << n << endl;
+    int Rept = 100, PoolSize = 56, RInT = 10;
+    auto fun = [&]
+            (ofstream &out,
+             int n,
+             double alpha,
+             double minLink,
+             double maxLink,
+             int networkSize,
+             bool useClustered,
+             double ClusterR
+            ) -> void {
         double res_wj = 0, res = 0;
         double fail_wj = 0, fail = 0;
 
@@ -342,12 +349,11 @@ int main() {
         ThreadPool poolB(PoolSize);
         for (int rep = 0; rep < Rept; rep++) {
             B.emplace_back(poolB.enqueue([&] {
-//                cerr << "*";
                 cerr.flush();
-                Network networkWithJammer(n, 1, 20, 200, 20, 2, false);
+                Network networkWithJammer(n, minLink, maxLink, networkSize, 20, 2, useClustered, ClusterR);
                 pair<double, double> rs;
                 for (int i = 1; i <= RInT; i++) {
-                    auto r = networkWithJammer.run();
+                    auto r = networkWithJammer.run(alpha);
                     rs.first += get<0>(r);
                     rs.second += get<1>(r);
                 }
@@ -361,26 +367,15 @@ int main() {
             res_wj += get<0>(itt);
             fail_wj += get<1>(itt);
         }
-//        for (int i = 1; i <= Rept; i++) {
-//            cerr << "*";
-//            cerr.flush();
-//            Network networkWithJammer(n, 1, 20, 200, 20, 2);
-//            auto r = networkWithJammer.run();
-//            fail_wj += get<1>(r) / 1.0 * n;
-//            res_wj += get<0>(r);
-//        }
-//        res_wj /= Rept, fail_wj /= Rept;
-
         vector<future<tuple<double, double>>> C;
         ThreadPool poolC(PoolSize);
         for (int rep = 0; rep < Rept; rep++) {
             C.emplace_back(poolC.enqueue([&] {
-//                cerr << "*";
                 cerr.flush();
-                Network network(n, 1, 20, 200, false);
+                Network network(n, minLink, maxLink, networkSize, useClustered, ClusterR);
                 pair<double, double> rs;
                 for (int i = 1; i <= RInT; i++) {
-                    auto r = network.run();
+                    auto r = network.run(alpha);
                     rs.first += get<0>(r);
                     rs.second += get<1>(r);
                 }
@@ -394,18 +389,14 @@ int main() {
             res += get<0>(itt);
             fail += get<1>(itt);
         }
-//        for (int i = 1; i <= Rept; i++) {
-//            cerr << "*";
-//            cerr.flush();
-//            Network network(n, 1, 20, 200);
-//            auto r = network.run();
-//            fail += get<1>(r) / 1.0 * n;
-//            res += get<0>(r);
-//        }
-//        res /= Rept, fail /= Rept;
-
         cerr << endl;
         out << n << " " << res_wj << " " << res << " " << fail_wj << " " << fail << "\n";
+    };
+
+    ofstream out1(R"(data1.txt)");
+    for (int n = 200; n <= 400; n += 50) {
+        cerr << n << endl;
+        fun(out1, n, 3, 1, 20, 200, false, 10);
     }
     return 0;
 }
