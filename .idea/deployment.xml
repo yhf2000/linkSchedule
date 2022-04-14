@@ -26,8 +26,12 @@
       <paths name="iic (6de51099-db7e-49b5-a0a1-a88238f602d9)">
         <serverdata>
           <mappings>
-            <mapping local="$PROJECT_DIR$" web="/" />
+            <mapping deploy="/tmp/tmp.LOOzAxJw6p" local="$PROJECT_DIR$" />
           </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
+            <excludedPath local="true" path="$PROJECT_DIR$/cmake-build-debug" />
+          </excludedPaths>
         </serverdata>
       </paths>
       <paths name="iic (c14ff791-81ff-4ab6-af46-49e3014b384c)">
