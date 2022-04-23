@@ -260,14 +260,17 @@ struct Network {
         int Round = 0, lastRound = 0;
 
         double q = 1.0 / 8;
-        for (int k = 1; unFinishNumber > 0; q /= 2, k++) {
+        for (int k = 1; unFinishNumber > 0 && q >= 1.0 / (4 * linkNumber); q /= 2, k++) {
 
             for (int it = 0; it < 8 / q * Const::c1 * log(d.size()) && unFinishNumber > 0; it++) {
 
                 // Algorithm end if no link finished in 200 round
-                if (Round - lastRound > 200) {
+                if (Round - lastRound > 1000 ||
+                    (Round - lastRound > 600 && unFinishNumber / (double) linkNumber < 0.005) ||
+                    (Round - lastRound > 800 && unFinishNumber / (double) linkNumber < 0.008)) {
                     return make_tuple(Round, unFinishNumber);
                 }
+
 
                 Round++;
 
@@ -326,7 +329,6 @@ struct Network {
     }
 
 };
-
 
 
 int main() {
