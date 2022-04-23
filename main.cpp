@@ -95,6 +95,8 @@ struct Gen {
     }
 };
 
+Gen g;
+
 struct SINR {
     double alpha, beta, N;
 
@@ -135,6 +137,7 @@ struct Network {
             double jammerMaxLength,
             double jammerMinLength,
             bool useClustered = false,
+            bool useBoth = false,
             double ClusterR = Const::ClusterR) :
             linkNumber(linkNumber),
             minLink(minLink),
@@ -145,8 +148,13 @@ struct Network {
             useJammer(true),
             useClustered(useClustered),
             ClusterR(ClusterR) {
-        if (!useClustered)initLinkData();
-        else initClusteredLinkData();
+        if (useBoth) {
+            initLinkData();
+            initClusteredLinkData();
+        } else {
+            if (!useClustered)initLinkData();
+            else initClusteredLinkData();
+        }
         initJammer();
     }
 
@@ -155,6 +163,7 @@ struct Network {
             double maxLink,
             int networkSize,
             bool useClustered = false,
+            bool useBoth = false,
             double ClusterR = Const::ClusterR) :
             linkNumber(linkNumber),
             minLink(minLink),
@@ -163,13 +172,16 @@ struct Network {
             useJammer(false),
             useClustered(useClustered),
             ClusterR(ClusterR) {
-        if (!useClustered)initLinkData();
-        else initClusteredLinkData();
-
+        if (useBoth) {
+            initLinkData();
+            initClusteredLinkData();
+        } else {
+            if (!useClustered)initLinkData();
+            else initClusteredLinkData();
+        }
     }
 
     void initLinkData() {
-        Gen g;
         for (int i = 0; i < linkNumber; i++) {
             auto nd = g.genNode(-networkSize / 2.0, networkSize / 2.0);
             auto lk = g.genLink(nd, minLink, maxLink);
@@ -188,7 +200,6 @@ struct Network {
     }
 
     void initClusteredLinkData() {
-        Gen g;
 
         // 获取 Cluster 的圈
         for (int i = 1; i <= Const::ClusterNumber; i++) {
@@ -235,7 +246,6 @@ struct Network {
     }
 
     void initJammer() {
-        Gen g;
         auto nd = Node(0, 0);
         jammer = g.genLink(nd, 1, jammerMinLength, true);
     }
@@ -250,7 +260,6 @@ struct Network {
 
 
     auto run(double alpha = -1) {
-        Gen g;
         SINR sinr(alpha);
         for (auto &i: d) {
             i.ReceiverGetMessage = false;
@@ -342,7 +351,8 @@ int main() {
              double maxLink,
              int networkSize,
              bool useClustered,
-             double ClusterR
+             double ClusterR,
+             bool useBoth
             ) -> void {
         double res_wj = 0, res = 0;
         double fail_wj = 0, fail = 0;
@@ -352,7 +362,15 @@ int main() {
         for (int rep = 0; rep < Rept; rep++) {
             B.emplace_back(poolB.enqueue([&] {
                 cerr.flush();
-                Network networkWithJammer(n, minLink, maxLink, networkSize, 20, 2, useClustered, ClusterR);
+                Network networkWithJammer(n,
+                                          minLink,
+                                          maxLink,
+                                          networkSize,
+                                          20,
+                                          2,
+                                          useClustered,
+                                          useBoth,
+                                          ClusterR);
                 pair<double, double> rs;
                 for (int i = 1; i <= RInT; i++) {
                     auto r = networkWithJammer.run(alpha);
@@ -374,7 +392,13 @@ int main() {
         for (int rep = 0; rep < Rept; rep++) {
             C.emplace_back(poolC.enqueue([&] {
                 cerr.flush();
-                Network network(n, minLink, maxLink, networkSize, useClustered, ClusterR);
+                Network network(n,
+                                minLink,
+                                maxLink,
+                                networkSize,
+                                useClustered,
+                                useBoth,
+                                ClusterR);
                 pair<double, double> rs;
                 for (int i = 1; i <= RInT; i++) {
                     auto r = network.run(alpha);
@@ -398,7 +422,7 @@ int main() {
     ofstream out1(R"(data1.txt)");
     for (int n = 200; n <= 400; n += 50) {
         cerr << n << endl;
-        fun(out1, n, 3, 1, 20, 200, false, 10);
+        fun(out1, n, 3, 1, 20, 200, false, 10, false);
     }
     return 0;
 }
