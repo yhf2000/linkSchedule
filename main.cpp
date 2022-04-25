@@ -42,7 +42,7 @@ struct Node {
     }
 
     bool inA(double X, double Y) {
-        return -X <= x * 2 && x * 2 <= X && -Y <= y * 2 && y * 2 <= Y;
+        return X <= x * 2 && x * 2 <= Y && X <= y * 2 && y * 2 <= Y;
     }
 };
 
@@ -71,6 +71,10 @@ struct Gen {
         e.seed(time(nullptr));
     }
 
+    void seed(unsigned long long x){
+        e.seed(x);
+    }
+
     Node genNode(double minV, double maxV) {
         uniform_real_distribution<double> u(minV, maxV);
         return {u(e), u(e)};
@@ -95,7 +99,6 @@ struct Gen {
     }
 };
 
-Gen g;
 
 struct SINR {
     double alpha, beta, N;
@@ -182,6 +185,8 @@ struct Network {
     }
 
     void initLinkData() {
+        Gen g;
+        g.seed((unsigned long long)(void*)(& g));
         for (int i = 0; i < linkNumber; i++) {
             auto nd = g.genNode(-networkSize / 2.0, networkSize / 2.0);
             auto lk = g.genLink(nd, minLink, maxLink);
@@ -200,11 +205,13 @@ struct Network {
     }
 
     void initClusteredLinkData() {
+        Gen g;
+        g.seed((unsigned long long)(void*)(& g));
 
         // 获取 Cluster 的圈
         for (int i = 1; i <= Const::ClusterNumber; i++) {
             auto cen = g.genNode(-networkSize / 2.0, networkSize / 2.0);
-            if (!cen.inA(-networkSize / 2.0 + ClusterR, networkSize / 2.0 - ClusterR)) {
+            if (!cen.inA(-networkSize + ClusterR * 2, networkSize - ClusterR * 2)) {
                 i--;
                 continue;
             }
@@ -246,6 +253,9 @@ struct Network {
     }
 
     void initJammer() {
+        Gen g;
+        g.seed((unsigned long long)(void*)(& g));
+
         auto nd = Node(0, 0);
         jammer = g.genLink(nd, 1, jammerMinLength, true);
     }
@@ -260,6 +270,9 @@ struct Network {
 
 
     auto run(double alpha = -1) {
+        Gen g;
+        g.seed((unsigned long long)(void*)(& g));
+
         SINR sinr(alpha);
         for (auto &i: d) {
             i.ReceiverGetMessage = false;
@@ -342,7 +355,10 @@ struct Network {
 
 int main() {
 
-    int Rept = 100, PoolSize = 56, RInT = 10;
+    const int Rept = 100, PoolSize = 56, RInT = 10;
+    // 其他点距离 jammer 的最大或最小距离
+    const double jammerMaxLength = 20, jammerMinLength = 2;
+
     auto fun = [&]
             (ofstream &out,
              int n,
@@ -361,13 +377,12 @@ int main() {
         ThreadPool poolB(PoolSize);
         for (int rep = 0; rep < Rept; rep++) {
             B.emplace_back(poolB.enqueue([&] {
-                cerr.flush();
                 Network networkWithJammer(n,
                                           minLink,
                                           maxLink,
                                           networkSize,
-                                          20,
-                                          2,
+                                          jammerMaxLength,
+                                          jammerMinLength,
                                           useClustered,
                                           useBoth,
                                           ClusterR);
@@ -391,7 +406,6 @@ int main() {
         ThreadPool poolC(PoolSize);
         for (int rep = 0; rep < Rept; rep++) {
             C.emplace_back(poolC.enqueue([&] {
-                cerr.flush();
                 Network network(n,
                                 minLink,
                                 maxLink,
@@ -419,10 +433,32 @@ int main() {
         out << n << " " << res_wj << " " << res << " " << fail_wj << " " << fail << "\n";
     };
 
-    ofstream out1(R"(data1.txt)");
+//    ofstream out1(R"(data1.txt)");
+//    for (int n = 200; n <= 400; n += 50) {
+//        cerr << n << endl;
+//        fun(out1,
+//            n,
+//            3,
+//            1,
+//            20,
+//            200,
+//            false,
+//            10,
+//            false);
+//    }
+
+    ofstream out2(R"(data2.txt)");
     for (int n = 200; n <= 400; n += 50) {
         cerr << n << endl;
-        fun(out1, n, 3, 1, 20, 200, false, 10, false);
+        fun(out2,
+            n,
+            3,
+            1,
+            20,
+            200,
+            true,
+            Const::ClusterR,
+            false);
     }
     return 0;
 }
