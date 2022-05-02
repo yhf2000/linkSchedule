@@ -5,7 +5,7 @@ using namespace std;
 
 namespace Const {
     double c1 = 2;
-    double alpha = 3, beta = 1.2, N = 0;
+    double alpha = 2, beta = 50, N = 0;
     double Power = 1;
     int ClusterNumber = 6;
     double ClusterR = 10;
@@ -195,7 +195,7 @@ struct Network {
         for (int i = 0; i < linkNumber; i++) {
             auto nd = g.genNode(-networkSize / 2.0, networkSize / 2.0);
             auto lk = g.genLink(nd, minLink, maxLink);
-            if (!lk.inA(networkSize, networkSize)) {
+            if (!lk.inA(-networkSize, networkSize)) {
                 i--;
                 continue;
             }
@@ -297,10 +297,10 @@ struct Network {
                 // 符合当前轮次的 Link
                 for (auto &link: d) {
                     double len = (link.Sender - link.Receiver).dis();
-                    if ((1 << (i - 1)) <= len && len <= (1 << (i))) {
+                    if ((1 << (i - 1)) <= len && len < (1 << (i))) {
                         lk.emplace_back(&link);
                         double A = Ie;
-                        mxRound = max(mxRound, (int)ceil(delta * A));
+                        mxRound = max(mxRound, (int) ceil(delta * A));
                         if (!link.SenderGetAck) {
                             while (A > sigma * log2(linkNumber)) {
                                 int delay = g.getInt(1, ceil(delta * A));
@@ -330,7 +330,7 @@ struct Network {
                     }
 
                     vector<int> idx;
-                    Senders.clear(), cnt = 0;
+                    Senders.clear();
                     for (int j = 0; j < mpItem.second.size(); j++) {
                         auto x = mpItem.second[j];
                         if (x->ReceiverGetMessage && g.choice(p_hat)) {
@@ -380,20 +380,20 @@ struct Network {
 
                     for (int j = 0; j < lk.size(); j++) {
                         auto x = lk[j];
-                        if(x->ReceiverGetMessage && g.choice(Pc)){
+                        if (x->ReceiverGetMessage && g.choice(Pc)) {
                             Sender.emplace_back(x->Receiver);
                             idx.emplace_back(j);
                         }
                         x->ReceiverGetMessage = false;
                     }
 
-                    for(int j = 0; j < lk.size(); j ++){
+                    for (int j = 0; j < lk.size(); j++) {
                         auto x = lk[j];
-                        if(!x->SenderGetAck){
+                        if (!x->SenderGetAck) {
                             int res = sinr.listen(x->Sender, Sender);
-                            if(res != -1 && idx[res] == j) {
+                            if (res != -1 && idx[res] == j) {
                                 x->SenderGetAck = true;
-                                unFinishNumber --;
+                                unFinishNumber--;
                             }
                         }
                     }
@@ -467,6 +467,7 @@ struct Network {
                         Senders.emplace_back(d[i].Receiver);
                         idx.emplace_back(i);
                     }
+                    //// TODO
                     d[i].ReceiverGetMessage = false;
                 }
                 for (int i = 0; i < d.size(); i++) {
@@ -491,7 +492,7 @@ struct Network {
 
 int main() {
 
-    const int Rept = 100, PoolSize = 56, RInT = 10;
+    const int Rept = 1, PoolSize = 56, RInT = 1;
     // 其他点距离 jammer 的最大或最小距离
     const double jammerMaxLength = 20, jammerMinLength = 2;
 
@@ -569,6 +570,51 @@ int main() {
         out << n << " " << res_wj << " " << res << " " << fail_wj << " " << fail << "\n";
     };
 
+    auto fun2 = [&]
+            (ofstream &out,
+             int n,
+             double alpha,
+             double minLink,
+             double maxLink,
+             int networkSize,
+             bool useClustered,
+             double ClusterR,
+             bool useBoth
+            ) -> void {
+        double res_wj = 0, res = 0;
+        double fail_wj = 0, fail = 0;
+
+//        vector<future<tuple<double, double>>> C;
+//        ThreadPool poolC(PoolSize);
+//        for (int rep = 0; rep < Rept; rep++) {
+//            C.emplace_back(poolC.enqueue([&] {
+                Network network(n,
+                                minLink,
+                                maxLink,
+                                networkSize,
+                                useClustered,
+                                useBoth,
+                                ClusterR);
+                pair<double, double> rs;
+                for (int i = 1; i <= RInT; i++) {
+                    auto r = network.anotherLinkSchedulingAlgorithmRun(alpha);
+                    rs.first += get<0>(r);
+                    rs.second += get<1>(r);
+                }
+                rs.first /= RInT, rs.second /= RInT;
+
+//                return make_tuple(rs.first * 1.0 / Rept, rs.second / (1.0 * n) / Rept);
+//            }));
+//        }
+//        for (auto &&it: C) {
+//            auto itt = it.get();
+//            res += get<0>(itt);
+//            fail += get<1>(itt);
+//        }
+        cerr << endl;
+        out << n << " " << res_wj << " " << res << " " << fail_wj << " " << fail << "\n";
+    };
+
 //    ofstream out1(R"(data1.txt)");
 //    for (int n = 200; n <= 400; n += 50) {
 //        cerr << n << endl;
@@ -583,16 +629,16 @@ int main() {
 //            false);
 //    }
 
-    ofstream out2(R"(data2.txt)");
+    ofstream out(R"(data.txt)");
     for (int n = 200; n <= 400; n += 50) {
         cerr << n << endl;
-        fun(out2,
+        fun2(out,
             n,
-            3,
+            Const::alpha,
             1,
             20,
             200,
-            true,
+            false,
             Const::ClusterR,
             false);
     }
