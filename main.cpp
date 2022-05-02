@@ -71,7 +71,7 @@ struct Gen {
         e.seed(time(nullptr));
     }
 
-    void seed(unsigned long long x){
+    void seed(unsigned long long x) {
         e.seed(x);
     }
 
@@ -91,6 +91,11 @@ struct Gen {
         uniform_real_distribution<double> pu(-1, 1);
         if (r) return {Sender + Node(pu(e), pu(e)).Normalized() * lu(e), Sender};
         return {Sender, Sender + Node(pu(e), pu(e)).Normalized() * lu(e)};
+    }
+
+    int getInt(int minNumber, int maxNumber) {
+        uniform_int_distribution<int> rd(minNumber, maxNumber);
+        return rd(e);
     }
 
     bool choice(double p) {
@@ -186,7 +191,7 @@ struct Network {
 
     void initLinkData() {
         Gen g;
-        g.seed((unsigned long long)(void*)(& g));
+        g.seed((unsigned long long) (void *) (&g));
         for (int i = 0; i < linkNumber; i++) {
             auto nd = g.genNode(-networkSize / 2.0, networkSize / 2.0);
             auto lk = g.genLink(nd, minLink, maxLink);
@@ -206,7 +211,7 @@ struct Network {
 
     void initClusteredLinkData() {
         Gen g;
-        g.seed((unsigned long long)(void*)(& g));
+        g.seed((unsigned long long) (void *) (&g));
 
         // 获取 Cluster 的圈
         for (int i = 1; i <= Const::ClusterNumber; i++) {
@@ -254,7 +259,7 @@ struct Network {
 
     void initJammer() {
         Gen g;
-        g.seed((unsigned long long)(void*)(& g));
+        g.seed((unsigned long long) (void *) (&g));
 
         auto nd = Node(0, 0);
         jammer = g.genLink(nd, 1, jammerMinLength, true);
@@ -268,10 +273,141 @@ struct Network {
         }
     }
 
+    auto anotherLinkSchedulingAlgorithmRun(double alpha = -1) {
+        Gen g;
+        g.seed((unsigned long long) (void *) (&g));
+
+        SINR sinr(alpha);
+        double p_hat = 1.0 / 2 *
+                       pow((pow(sinr.beta, 1 / sinr.alpha) - 2)
+                           / (pow(sinr.beta, 1 / sinr.alpha) + 2),
+                           sinr.alpha
+                       );
+        double sigma = 96 * (1 / p_hat), delta = 64 * exp(1) * (1 / p_hat);
+        double Ie = sigma * log2(linkNumber), Pc = 1 / (2 * sigma * log2(linkNumber));
+
+        int unFinishNumber = (int) d.size();
+        int roundCount = 0;
+
+        while (unFinishNumber >= 1) {
+            for (int i = 1; i <= ceil(log2(maxLink)); i++) {
+                vector<Link *> lk;
+                map<int, vector<Link *>> mp;
+                int mxRound = 0;
+                // 符合当前轮次的 Link
+                for (auto &link: d) {
+                    double len = (link.Sender - link.Receiver).dis();
+                    if ((1 << (i - 1)) <= len && len <= (1 << (i))) {
+                        lk.emplace_back(&link);
+                        double A = Ie;
+                        mxRound = max(mxRound, (int)ceil(delta * A));
+                        if (!link.SenderGetAck) {
+                            while (A > sigma * log2(linkNumber)) {
+                                int delay = g.getInt(1, ceil(delta * A));
+                                mp[delay].emplace_back(&link);
+                                A = (1 - p_hat / 8) * A;
+                            }
+                        }
+                    }
+                }
+                roundCount += mxRound;
+
+                for (auto &mpItem: mp) {
+                    vector<Node> Senders;
+                    // Slot 1: sv transmit
+                    for (auto x: mpItem.second) {
+                        if (!x->SenderGetAck) {
+                            Senders.emplace_back(x->Sender);
+                        }
+                    }
+                    int cnt = 0;
+                    for (auto x: mpItem.second) {
+                        if (!x->SenderGetAck) {
+                            auto res = sinr.listen(x->Receiver, Senders);
+                            if (res == cnt) x->ReceiverGetMessage = true;
+                            cnt++;
+                        }
+                    }
+
+                    vector<int> idx;
+                    Senders.clear(), cnt = 0;
+                    for (int j = 0; j < mpItem.second.size(); j++) {
+                        auto x = mpItem.second[j];
+                        if (x->ReceiverGetMessage && g.choice(p_hat)) {
+                            Senders.emplace_back(x->Receiver);
+                            idx.emplace_back(j);
+                        }
+                        x->ReceiverGetMessage = false;
+                    }
+
+                    for (int j = 0; j < mpItem.second.size(); j++) {
+                        auto x = mpItem.second[j];
+                        if (!x->SenderGetAck) {
+                            int res = sinr.listen(x->Sender, Senders);
+                            if (res != -1 && idx[res] == j) {
+                                x->SenderGetAck = true;
+                                unFinishNumber--;
+                            }
+                        }
+                    }
+                }
+
+                int round = (int) (24.0 / p_hat * sigma * log2(linkNumber) * log2(linkNumber));
+                roundCount += round;
+                while (round--) {
+                    vector<int> idx;
+                    vector<Node> Sender;
+                    for (int j = 0; j < lk.size(); j++) {
+                        auto x = lk[j];
+                        if (!x->SenderGetAck && g.choice(Pc)) {
+                            Sender.emplace_back(x->Sender);
+                            idx.emplace_back(j);
+                        }
+                    }
+
+                    for (int j = 0; j < lk.size(); j++) {
+                        auto x = lk[j];
+                        if (!x->SenderGetAck) {
+                            int res = sinr.listen(x->Receiver, Sender);
+                            if (res != -1 && idx[res] == j) {
+                                x->ReceiverGetMessage = true;
+                            }
+                        }
+                    }
+
+                    Sender.clear();
+                    idx.clear();
+
+                    for (int j = 0; j < lk.size(); j++) {
+                        auto x = lk[j];
+                        if(x->ReceiverGetMessage && g.choice(Pc)){
+                            Sender.emplace_back(x->Receiver);
+                            idx.emplace_back(j);
+                        }
+                        x->ReceiverGetMessage = false;
+                    }
+
+                    for(int j = 0; j < lk.size(); j ++){
+                        auto x = lk[j];
+                        if(!x->SenderGetAck){
+                            int res = sinr.listen(x->Sender, Sender);
+                            if(res != -1 && idx[res] == j) {
+                                x->SenderGetAck = true;
+                                unFinishNumber --;
+                            }
+                        }
+                    }
+                }
+            }
+            Ie = 2 * Ie;
+        }
+        return make_tuple(roundCount, unFinishNumber);
+    }
+
 
     auto run(double alpha = -1) {
         Gen g;
-        g.seed((unsigned long long)(void*)(& g));
+        g.seed((unsigned long long) (void *) (&g));
 
         SINR sinr(alpha);
         for (auto &i: d) {
@@ -292,7 +428,6 @@ struct Network {
                     (Round - lastRound > 800 && unFinishNumber / (double) linkNumber < 0.008)) {
                     return make_tuple(Round, unFinishNumber);
                 }
-
 
                 Round++;
 
@@ -332,6 +467,7 @@ struct Network {
                         Senders.emplace_back(d[i].Receiver);
                         idx.emplace_back(i);
                     }
+                    d[i].ReceiverGetMessage = false;
                 }
                 for (int i = 0; i < d.size(); i++) {
                     if (!d[i].SenderGetAck) {
